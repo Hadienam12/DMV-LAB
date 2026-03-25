@@ -1,0 +1,153 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import numpy as np
+
+# ── Load data ──────────────────────────────────────────────────────────────────
+df = pd.read_csv("network_security_metrics.csv")
+
+# ── Colour palette ─────────────────────────────────────────────────────────────
+COLORS   = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3",
+            "#937860", "#DA8BC3", "#8C8C8C", "#CCB974", "#64B5CD"]
+BG_COLOR = "#F7F9FC"
+
+fig = plt.figure(figsize=(22, 18), facecolor=BG_COLOR)
+fig.suptitle("Network & Cybersecurity Metrics Dashboard",
+             fontsize=22, fontweight="bold", y=0.98, color="#1A1A2E")
+
+gs = gridspec.GridSpec(2, 3, figure=fig, hspace=0.42, wspace=0.35)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 1. BAR CHART — Avg Packet Count by Attack Type
+# ══════════════════════════════════════════════════════════════════════════════
+ax1 = fig.add_subplot(gs[0, 0])
+bar_data = df.groupby("attack_type")["packet_count"].mean().sort_values(ascending=False)
+bars = ax1.bar(bar_data.index, bar_data.values,
+               color=COLORS[:len(bar_data)], edgecolor="white", linewidth=1.2, zorder=3)
+ax1.set_facecolor(BG_COLOR)
+ax1.set_title("Avg Packet Count by Attack Type", fontsize=12, fontweight="bold", pad=10)
+ax1.set_xlabel("Attack Type", fontsize=10)
+ax1.set_ylabel("Avg Packet Count", fontsize=10)
+ax1.yaxis.grid(True, linestyle="--", alpha=0.6, zorder=0)
+ax1.set_axisbelow(True)
+ax1.tick_params(axis="x", rotation=15)
+for bar in bars:
+    ax1.text(bar.get_x() + bar.get_width() / 2,
+             bar.get_height() + 80,
+             f"{int(bar.get_height()):,}",
+             ha="center", va="bottom", fontsize=8.5, fontweight="bold", color="#333")
+ax1.spines[["top", "right"]].set_visible(False)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 2. SCATTER PLOT — Anomaly Score vs Detection Latency (coloured by intrusion)
+# ══════════════════════════════════════════════════════════════════════════════
+ax2 = fig.add_subplot(gs[0, 1])
+ax2.set_facecolor(BG_COLOR)
+for label, color, marker in [(0, "#55A868", "o"), (1, "#C44E52", "^")]:
+    mask = df["intrusion_detected"] == label
+    ax2.scatter(df.loc[mask, "anomaly_score"],
+                df.loc[mask, "detection_latency_ms"],
+                c=color, label="Intrusion" if label else "Normal",
+                alpha=0.85, s=80, edgecolors="white", linewidths=0.6,
+                marker=marker, zorder=3)
+# Trend line
+z = np.polyfit(df["anomaly_score"], df["detection_latency_ms"], 1)
+p = np.poly1d(z)
+xs = np.linspace(df["anomaly_score"].min(), df["anomaly_score"].max(), 100)
+ax2.plot(xs, p(xs), "--", color="#8172B3", linewidth=1.5, alpha=0.7, label="Trend")
+ax2.set_title("Anomaly Score vs Detection Latency", fontsize=12, fontweight="bold", pad=10)
+ax2.set_xlabel("Anomaly Score", fontsize=10)
+ax2.set_ylabel("Detection Latency (ms)", fontsize=10)
+ax2.legend(fontsize=9, framealpha=0.7)
+ax2.yaxis.grid(True, linestyle="--", alpha=0.6, zorder=0)
+ax2.xaxis.grid(True, linestyle="--", alpha=0.6, zorder=0)
+ax2.set_axisbelow(True)
+ax2.spines[["top", "right"]].set_visible(False)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 3. PIE CHART — Threat Level Distribution
+# ══════════════════════════════════════════════════════════════════════════════
+ax3 = fig.add_subplot(gs[0, 2])
+ax3.set_facecolor(BG_COLOR)
+pie_data  = df["threat_level"].value_counts()
+pie_order = ["Low", "Medium", "High", "Critical"]
+pie_data  = pie_data.reindex([x for x in pie_order if x in pie_data.index])
+pie_colors = ["#55A868", "#CCB974", "#DD8452", "#C44E52"][:len(pie_data)]
+wedges, texts, autotexts = ax3.pie(
+    pie_data.values,
+    labels=pie_data.index,
+    autopct="%1.1f%%",
+    colors=pie_colors,
+    startangle=140,
+    pctdistance=0.78,
+    wedgeprops=dict(edgecolor="white", linewidth=2),
+    explode=[0.04] * len(pie_data)
+)
+for at in autotexts:
+    at.set_fontsize(9)
+    at.set_fontweight("bold")
+    at.set_color("white")
+ax3.set_title("Threat Level Distribution", fontsize=12, fontweight="bold", pad=10)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. STAIR (STEP) CHART — CPU Usage % over Rows / Time Steps
+# ══════════════════════════════════════════════════════════════════════════════
+ax4 = fig.add_subplot(gs[1, 0])
+ax4.set_facecolor(BG_COLOR)
+ax4.step(range(len(df)), df["cpu_usage_pct"],
+         where="post", color="#4C72B0", linewidth=2, label="CPU %")
+ax4.fill_between(range(len(df)), df["cpu_usage_pct"],
+                 step="post", alpha=0.15, color="#4C72B0")
+ax4.step(range(len(df)), df["ram_usage_pct"],
+         where="post", color="#DD8452", linewidth=2, linestyle="--", label="RAM %")
+ax4.axhline(y=80, color="#C44E52", linewidth=1.2, linestyle=":", alpha=0.8, label="80% Threshold")
+ax4.set_title("CPU & RAM Usage Over Time (Step Chart)", fontsize=12, fontweight="bold", pad=10)
+ax4.set_xlabel("Sample Index", fontsize=10)
+ax4.set_ylabel("Usage (%)", fontsize=10)
+ax4.set_ylim(0, 110)
+ax4.legend(fontsize=9, framealpha=0.7)
+ax4.yaxis.grid(True, linestyle="--", alpha=0.6, zorder=0)
+ax4.set_axisbelow(True)
+ax4.spines[["top", "right"]].set_visible(False)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. LINE CHART — FL Convergence: Accuracy & Loss vs Round
+# ══════════════════════════════════════════════════════════════════════════════
+ax5 = fig.add_subplot(gs[1, 1:])   # spans 2 columns for emphasis
+ax5.set_facecolor(BG_COLOR)
+fl_df = df.groupby("fl_round")[["local_accuracy", "global_accuracy", "loss_value"]].mean().reset_index()
+
+ax5.plot(fl_df["fl_round"], fl_df["local_accuracy"],
+         marker="o", color="#4C72B0", linewidth=2.2, markersize=6, label="Local Accuracy")
+ax5.plot(fl_df["fl_round"], fl_df["global_accuracy"],
+         marker="s", color="#55A868", linewidth=2.2, markersize=6, label="Global Accuracy")
+ax5.fill_between(fl_df["fl_round"], fl_df["local_accuracy"],
+                 fl_df["global_accuracy"], alpha=0.08, color="#4C72B0")
+
+ax5_r = ax5.twinx()
+ax5_r.plot(fl_df["fl_round"], fl_df["loss_value"],
+           marker="^", color="#C44E52", linewidth=2, markersize=6,
+           linestyle="--", label="Loss Value")
+ax5_r.set_ylabel("Loss Value", fontsize=10, color="#C44E52")
+ax5_r.tick_params(axis="y", labelcolor="#C44E52")
+ax5_r.spines[["top"]].set_visible(False)
+
+ax5.set_title("Federated Learning Convergence — Accuracy & Loss vs FL Round",
+              fontsize=12, fontweight="bold", pad=10)
+ax5.set_xlabel("FL Round", fontsize=10)
+ax5.set_ylabel("Accuracy", fontsize=10)
+ax5.yaxis.grid(True, linestyle="--", alpha=0.6, zorder=0)
+ax5.set_axisbelow(True)
+ax5.spines[["top", "right"]].set_visible(False)
+
+# Combined legend
+lines1, labels1 = ax5.get_legend_handles_labels()
+lines2, labels2 = ax5_r.get_legend_handles_labels()
+ax5.legend(lines1 + lines2, labels1 + labels2, fontsize=9,
+           framealpha=0.7, loc="center right")
+
+# ── Save ───────────────────────────────────────────────────────────────────────
+plt.savefig("charts_dashboard.png", dpi=180, bbox_inches="tight",
+            facecolor=BG_COLOR)
+print("✅ Saved: charts_dashboard.png")
+plt.show()
